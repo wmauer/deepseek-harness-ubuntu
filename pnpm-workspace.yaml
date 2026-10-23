@@ -16,6 +16,13 @@ packages:
 
 overrides:
   'extract-zip>yauzl': '3.4.0'
+  # Advisory fixes (pnpm audit --prod) for transitive dependencies whose parents still request
+  # vulnerable ranges; every override stays on the parent's major line.
+  http-cache-semantics: '4.3.0'
+  fflate: '0.8.3'
+  hono: '4.13.11'
+  ip-address: '10.7.4'
+  '@modelcontextprotocol/sdk': '1.32.0'
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
 
@@ -66,7 +73,7 @@ minimumReleaseAgeExclude:
   # point of bumping it; waiting out the release age would defeat that.
   - '@earendil-works/pi-ai@1.1.0'
   - '@earendil-works/pi-telemetry@1.1.0'
-  # This addon release recognizes the Electron 44.7.0 Node/V8 fingerprint used by Desktop.
+  # This addon release recognizes the Electron 44 Node ABI used by Desktop.
   - node-addon-native-custom-loader@0.1.9
   - node-addon-require-builtin-darwin-arm64@0.1.9
   - node-addon-require-builtin-darwin-x64@0.1.9
@@ -102,9 +109,9 @@ minimumReleaseAgeExclude:
   - '@trycua/cua-driver@0.28.0'
   # The package manager is a workspace devDependency, so its own exact pin
   # must be exempt from the release-age window that guards other packages.
-  - pnpm@11.28.5
-  # Desktop packaging requires this Electron fingerprint with node-addon-require-builtin 0.1.9.
-  - electron@44.7.0
+  - pnpm@11.28.7
+  # Desktop packaging qualifies this Electron 44 release, whose Node ABI node-addon-require-builtin 0.1.9 recognizes.
+  - electron@44.9.3
 patchedDependencies:
   '@earendil-works/pi-ai@1.1.0': patches/@earendil-works__pi-ai@1.1.0.patch
   '@electron/osx-sign@1.3.3': patches/@electron__osx-sign@1.3.3.patch
