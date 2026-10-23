@@ -48,7 +48,7 @@ function fixture(options: { setuid?: boolean; strayFile?: boolean; desktopEntry?
   file('resources/runtime/bin/node', '#!/bin/sh\n', 0o755)
   file('resources/runtime/primary-runtime/dependencies/node/bin/node', 'elf', 0o755)
   file('resources/runtime/primary-runtime/runtime.json', '{}')
-  file('resources/app.asar.unpacked/dsh/desktop-runtime.json', '{}')
+  file('resources/app.asar.unpacked/dsh/node_modules/example/package.json', '{}')
   mkdirSync(join(root, 'usr', 'share', 'applications'), { recursive: true })
   writeFileSync(join(root, 'usr', 'share', 'applications', 'deepseek-harness.desktop'), options.desktopEntry ?? DESKTOP_ENTRY)
   mkdirSync(join(root, 'usr', 'share', 'icons', 'hicolor', '256x256', 'apps'), { recursive: true })

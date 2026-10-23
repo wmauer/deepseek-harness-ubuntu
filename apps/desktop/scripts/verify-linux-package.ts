@@ -58,8 +58,8 @@ const REQUIRED_EXECUTABLES = [
   LINUX_EXECUTABLE_NAME, 'chrome-sandbox', 'resources/runtime/cli/bin/dsh', 'resources/runtime/bin/node',
   'resources/runtime/primary-runtime/dependencies/node/bin/node',
 ]
-const REQUIRED_FILES = ['resources/app.asar', 'resources/apparmor-profile', 'resources/icon.png',
-  'resources/runtime/primary-runtime/runtime.json', 'resources/app.asar/../app.asar.unpacked/dsh/desktop-runtime.json']
+// The dsh runtime descriptor lives inside app.asar; verify-runtime-archive.ts reads it during the packaged smoke.
+const REQUIRED_FILES = ['resources/app.asar', 'resources/apparmor-profile', 'resources/icon.png', 'resources/runtime/primary-runtime/runtime.json']
 
 /**
  * Convert a semantic version to the Debian form electron-builder writes: prerelease separators become `~`,
