@@ -1,4 +1,11 @@
 {
   "minimumReleaseAgeHours": 24,
-  "holds": []
+  "holds": [
+    {
+      "component": "electron",
+      "version": "44.7.0",
+      "reason": "node-addon-require-builtin 0.1.9 recognizes the Electron 44.7.0 runtime fingerprint only; Electron 44.9.x fails prepare:dsh until an addon release adds its fingerprint",
+      "expires": "2026-12-31"
+    }
+  ]
 }

@@ -73,7 +73,7 @@ minimumReleaseAgeExclude:
   # point of bumping it; waiting out the release age would defeat that.
   - '@earendil-works/pi-ai@1.1.0'
   - '@earendil-works/pi-telemetry@1.1.0'
-  # This addon release recognizes the Electron 44 Node ABI used by Desktop.
+  # This addon release recognizes the Electron 44.7.0 Node/V8 fingerprint used by Desktop.
   - node-addon-native-custom-loader@0.1.9
   - node-addon-require-builtin-darwin-arm64@0.1.9
   - node-addon-require-builtin-darwin-x64@0.1.9
@@ -110,8 +110,8 @@ minimumReleaseAgeExclude:
   # The package manager is a workspace devDependency, so its own exact pin
   # must be exempt from the release-age window that guards other packages.
   - pnpm@11.28.7
-  # Desktop packaging qualifies this Electron 44 release, whose Node ABI node-addon-require-builtin 0.1.9 recognizes.
-  - electron@44.9.3
+  # Desktop packaging requires this Electron fingerprint with node-addon-require-builtin 0.1.9.
+  - electron@44.7.0
 patchedDependencies:
   '@earendil-works/pi-ai@1.1.0': patches/@earendil-works__pi-ai@1.1.0.patch
   '@electron/osx-sign@1.3.3': patches/@electron__osx-sign@1.3.3.patch
