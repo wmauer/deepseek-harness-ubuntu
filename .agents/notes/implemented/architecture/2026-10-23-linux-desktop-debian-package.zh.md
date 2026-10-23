@@ -14,7 +14,9 @@ Linux 是 Desktop 发布目标，有两个固定名称 `linux-x64` 和 `linux-ar
 
 每种架构在各自主机上原生构建：`linux-x64` 在 Linux x64 主机上，`linux-arm64` 在 Linux arm64 主机上。`Package Desktop · Linux` 工作流使用 GitHub 托管的 `ubuntu-24.04` 和 `ubuntu-24.04-arm` runner，在手动触发和 `dsh-v*` 标签时运行，通过保留的工作流产物发布，附带 `SHA256SUMS`，公开仓库还附带构建来源证明。Linux 没有自托管 runner、机器 preset 或 COS 上传。
 
-Linux 包没有代码签名、更新源和强制更新策略。打包只读取可选的 `apps/desktop/.env.linux`（应用标识、npm registry、Debian 维护者）；`--unsigned` 和 `--skip-notarization` 会被拒绝，因为不存在需要区分的签名变体。已安装应用没有 `app-update.yml`，更新协调器因此报告已安装版本为最新，新版本通过 `apt` 或 `dpkg` 安装。维护者默认为 `.invalid` 占位地址，直到仓库变量 `DSH_DESKTOP_LINUX_MAINTAINER` 或 `.env.linux` 指明发布方。
+Linux 包没有代码签名、更新源和强制更新策略。打包只读取可选的 `apps/desktop/.env.linux`（应用标识、npm registry、Debian 维护者）；`--unsigned` 和 `--skip-notarization` 会被拒绝，因为不存在需要区分的签名变体。已安装应用没有 `app-update.yml`，更新协调器因此报告已安装版本为最新，新版本通过 `apt` 或 `dpkg` 安装。维护者默认为 `.invalid` 占位地址，直到仓库变量 `DSH_DESKTOP_LINUX_MAINTAINER` 或 `.env.linux` 指明发布方。包在 `/usr/share/doc/deepseek-harness/copyright` 安装由仓库 LICENSE 渲染的 copyright-format 1.0 文件。
+
+Linux 上的 Office 转换使用 kit 的 WASM 引擎，因为没有发布 Linux 原生引擎包。在 Electron asar 内，`lstatSync` 对不存在的路径不会回应 `ENOENT`，因此 kit 的引擎探测把缺失的 `@deepseek-ai/libreoffice-kit-linux-x64-glibc` 包报告为不完整安装而不是选择 WASM；一个在 `runtime-patch-policy.ts` 中分类的共享 pnpm 补丁改用 `existsSync` 探测已安装引擎。
 
 壳在 Linux 上保留原生窗口边框和菜单栏，提供应用、文件和编辑菜单，在主窗口和欢迎窗口上绘制产品图标，在主窗口关闭时退出（Linux 没有 Dock 或托盘可供找回窗口），并通过共享的链接与回执 worker 在 `/usr/local/bin/dsh` 安装 `dsh` 命令，目录不可写时经由 `pkexec` 提权。Platform API 和更新策略请求把客户端标识为 `desktop-linux`。
 

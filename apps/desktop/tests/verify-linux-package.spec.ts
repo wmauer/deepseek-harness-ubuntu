@@ -5,7 +5,7 @@ import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { debianVersion, parseArchiveListing, parseDebianControl, parseDesktopEntry, verifyLinuxPackage } from '../scripts/verify-linux-package.ts'
+import { debianVersion, isRootOwner, parseArchiveListing, parseDebianControl, parseDesktopEntry, verifyLinuxPackage } from '../scripts/verify-linux-package.ts'
 import { DEFAULT_LINUX_MAINTAINER } from '../scripts/linux-package-settings.mjs'
 import { LINUX_INSTALL_ROOT } from '../scripts/linux-package-paths.mjs'
 
@@ -30,7 +30,7 @@ interface PackageFixture {
   control(fields: Record<string, string>): void
 }
 
-function fixture(options: { setuid?: boolean; strayFile?: boolean; desktopEntry?: string } = {}): PackageFixture {
+function fixture(options: { setuid?: boolean; strayFile?: boolean; desktopEntry?: string; copyright?: false } = {}): PackageFixture {
   const scratch = mkdtempSync(join(tmpdir(), 'dsh-deb-fixture-'))
   directories.push(scratch)
   const root = join(scratch, 'root')
@@ -54,6 +54,10 @@ function fixture(options: { setuid?: boolean; strayFile?: boolean; desktopEntry?
   mkdirSync(join(root, 'usr', 'share', 'icons', 'hicolor', '256x256', 'apps'), { recursive: true })
   writeFileSync(join(root, 'usr', 'share', 'icons', 'hicolor', '256x256', 'apps', 'deepseek-harness.png'), 'png')
   if (options.strayFile) { mkdirSync(join(root, 'usr', 'bin'), { recursive: true }); writeFileSync(join(root, 'usr', 'bin', 'stray'), '') }
+  if (options.copyright !== false) {
+    mkdirSync(join(root, 'usr', 'share', 'doc', 'deepseek-harness'), { recursive: true })
+    writeFileSync(join(root, 'usr', 'share', 'doc', 'deepseek-harness', 'copyright'), 'Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\n')
+  }
   const debian = join(root, 'DEBIAN')
   mkdirSync(debian)
   const control = (fields: Record<string, string>): void => {
@@ -82,6 +86,11 @@ function fixture(options: { setuid?: boolean; strayFile?: boolean; desktopEntry?
 const expectation = { version: '0.2.1-rc.2', arch: 'x64' as const, maintainer: DEFAULT_LINUX_MAINTAINER, homepage: HOMEPAGE }
 
 describe('Debian package verification', () => {
+  it('accepts root ownership whether the archive stores names or numeric ids', () => {
+    expect(['root/root', '0/0'].map(isRootOwner)).toEqual([true, true])
+    expect(['user/user', 'root/1000', '0/staff'].map(isRootOwner)).toEqual([false, false, false])
+  })
+
   it('maps prerelease separators to the tilde dpkg orders before the release', () => {
     expect(debianVersion('0.2.1-rc.2.20261023.4.1')).toBe('0.2.1~rc.2.20261023.4.1')
     expect(debianVersion('0.2.1')).toBe('0.2.1')
@@ -124,6 +133,7 @@ describe('Debian package verification', () => {
   it.skipIf(!dpkgAvailable)('rejects archive hygiene violations', async () => {
     await expect(verifyLinuxPackage(fixture({ setuid: true }).build(), expectation)).rejects.toThrow(/setuid/u)
     await expect(verifyLinuxPackage(fixture({ strayFile: true }).build(), expectation)).rejects.toThrow(/outside the directories/u)
+    await expect(verifyLinuxPackage(fixture({ copyright: false }).build(), expectation)).rejects.toThrow(/copyright/u)
     const missingScheme = fixture({ desktopEntry: DESKTOP_ENTRY.replace('MimeType=x-scheme-handler/dsh;\n', '') })
     await expect(verifyLinuxPackage(missingScheme.build(), expectation)).rejects.toThrow(/dsh URL scheme/u)
   })

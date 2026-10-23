@@ -113,6 +113,9 @@ minimumReleaseAgeExclude:
   # Desktop packaging requires this Electron fingerprint with node-addon-require-builtin 0.1.9.
   - electron@44.7.0
 patchedDependencies:
+  # Inside an Electron asar, lstatSync answers for missing paths without ENOENT, so the kit's
+  # engine probe reports the absent Linux native engine as incomplete instead of using WASM.
+  '@deepseek-ai/libreoffice-kit@0.1.5': patches/@deepseek-ai__libreoffice-kit@0.1.5.patch
   '@earendil-works/pi-ai@1.1.0': patches/@earendil-works__pi-ai@1.1.0.patch
   '@electron/osx-sign@1.3.3': patches/@electron__osx-sign@1.3.3.patch
   '@fortune-sheet/core@1.0.4': patches/@fortune-sheet__core@1.0.4.patch

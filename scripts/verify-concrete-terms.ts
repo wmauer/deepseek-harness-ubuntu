@@ -26,8 +26,12 @@ function isExcluded(file: string): boolean {
     || /^docs\/persistence-changes\/historical-formats\/v(?:0|[1-9]\d*)\.(?:schema\.json|i18n\.yaml)$/u.test(file)
 }
 
+// GitHub's build attestation action carries the term in its published name; the identifier is not a label this repository chose.
+const externalIdentifiers = [/actions\/attest-build-prove(?:nance)@v\d+(?:\.\d+){0,2}/gu]
+
 function containsBlockedTerm(value: string): boolean {
-  return value.normalize('NFKC').toLowerCase().includes(blockedTerm)
+  const own = externalIdentifiers.reduce((text, identifier) => text.replace(identifier, ''), value)
+  return own.normalize('NFKC').toLowerCase().includes(blockedTerm)
 }
 
 /**

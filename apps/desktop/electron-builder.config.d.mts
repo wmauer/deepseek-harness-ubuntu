@@ -57,6 +57,7 @@ export interface DesktopElectronBuilderConfig {
     readonly compression: 'xz'
     readonly depends: readonly string[]
     readonly recommends: readonly string[]
+    readonly fpm: readonly string[]
   }
   readonly nsis: {
     readonly include: string

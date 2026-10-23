@@ -16,7 +16,7 @@ it('omits development artifacts while preserving executable modules, assets and 
     'example/index.d.ts', 'example/index.d.mts', 'example/index.d.cts',
     'example/index.js.map', 'example/index.mjs.map', 'example/index.cjs.map',
     'example/style.css.map', 'example/index.d.ts.map', 'example/index.d.mts.map',
-    'example/index.d.cts.map', 'example/tsconfig.tsbuildinfo',
+    'example/index.d.cts.map', 'example/tsconfig.tsbuildinfo', 'example/.npmignore',
     'fs-ext/build/Release/obj/fs_ext/native.obj', 'fs-ext/build/Release/fs_ext.pdb',
     'fs-ext/build/Release/fs_ext.lib', 'fs-ext/build/Release/fs_ext.exp',
     'fs-ext/build/Release/fs_ext.iobj', 'fs-ext/build/Release/fs_ext.ipdb',

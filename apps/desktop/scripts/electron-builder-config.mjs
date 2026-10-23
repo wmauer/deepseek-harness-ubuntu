@@ -1,6 +1,6 @@
 import { officePackageDirectories } from '../../../scripts/libreoffice-packages.mjs'
 import { X509Certificate } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -25,7 +25,8 @@ import { resolveDesktopBuildVersion } from './desktop-build-version.mjs'
 import { resolveDesktopPolicyEnvironment } from './desktop-policy-environment.mjs'
 import { desktopArtifactOutput, desktopTargetBuildPaths, resolveDesktopBuildTarget } from './desktop-build-paths.mjs'
 import { resolveLinuxPackageSettings } from './linux-package-settings.mjs'
-import { LINUX_EXECUTABLE_NAME, LINUX_PACKAGE_NAME } from './linux-package-paths.mjs'
+import { LINUX_EXECUTABLE_NAME, LINUX_PACKAGE_NAME, LINUX_PRODUCT_DIRECTORY } from './linux-package-paths.mjs'
+import { LINUX_COPYRIGHT_PATH, renderDebianCopyright } from './linux-copyright.mjs'
 import { installWindowsDirectoryInstaller } from './windows-directory-installer.mjs'
 import { preserveWindowsRuntimeSignature, signWindowsCode } from './windows-runtime-signature.mjs'
 import { prepareWindowsAsarUnpack, verifyWindowsAsarUnpack } from './windows-asar-unpack.mjs'
@@ -77,6 +78,8 @@ export function createElectronBuilderConfig(
   if (packagesMacOS && !unsigned && !skipNotarization) resolveMacOSNotarizationEnvironment(env)
   const buildPaths = desktopTargetBuildPaths(resolveDesktopBuildTarget(env, hostPlatform, hostArch))
   const output = desktopArtifactOutput(buildPaths, { unsigned, skipNotarization })
+  // fpm copies this rendered file into the package; beforePack writes it from the repository LICENSE.
+  const linuxCopyrightSource = join(buildPaths.root, 'copyright')
   let primaryRuntimeDestination
   let dshDestination
   let windowsCode = []
@@ -105,7 +108,8 @@ export function createElectronBuilderConfig(
   if (preparedRuntime !== undefined) buildPaths.dsh = preparedRuntime
   // electron-builder merges extraMetadata into the packaged manifest, so a build version here reaches
   // the artifact names, the update feed, and the installed app.getVersion() the updater compares against.
-  const productVersion = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')).version
+  const manifest = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'))
+  const productVersion = manifest.version
   const buildVersion = resolveDesktopBuildVersion(env, productVersion)
   if (update?.channel === 'latest' && buildVersion.includes('-')) throw new Error('desktop package: latest requires a stable version')
   const packaged = resolveDesktopBuildCommit(env)
@@ -190,6 +194,10 @@ export function createElectronBuilderConfig(
       const patterns = office.map(directory => `**/${relative(buildPaths.dsh, directory).split(sep).join('/')}/**/*`)
       const existing = context.packager.config.asarUnpack ?? []
       context.packager.config.asarUnpack = [...(typeof existing === 'string' ? [existing] : existing), ...patterns]
+      if (packagesLinux) {
+        writeFileSync(linuxCopyrightSource, renderDebianCopyright(readFileSync(new URL('../../../LICENSE', import.meta.url), 'utf8'),
+          { name: LINUX_PRODUCT_DIRECTORY, homepage: manifest.homepage, license: manifest.license }))
+      }
       if (packagesWindows) windowsCode = await prepareWindowsAsarUnpack(context, buildPaths.dsh)
       if (windowsSigner !== undefined) {
         primaryRuntimeDestination = join(context.appOutDir, 'resources', 'runtime', 'primary-runtime')
@@ -271,6 +279,7 @@ export function createElectronBuilderConfig(
       packageCategory: 'devel',
       priority: 'optional',
       compression: 'xz',
+      fpm: [`${linuxCopyrightSource}=${LINUX_COPYRIGHT_PATH}`],
       // Runtime libraries Electron loads on Ubuntu 22.04+ and Debian 12+; the t64 packages provide these names.
       depends: [
         'ca-certificates', 'libasound2', 'libatk-bridge2.0-0', 'libatk1.0-0', 'libatspi2.0-0', 'libc6', 'libcairo2',

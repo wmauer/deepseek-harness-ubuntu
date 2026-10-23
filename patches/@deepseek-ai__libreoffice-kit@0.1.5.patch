@@ -1,0 +1,40 @@
+diff --git a/lib/index.js b/lib/index.js
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -1,5 +1,5 @@
+ import { createRequire } from "node:module";
+-import { closeSync, constants, createWriteStream, lstatSync, readSync, readdirSync } from "node:fs";
++import { closeSync, constants, createWriteStream, existsSync, readSync, readdirSync } from "node:fs";
+ import { copyFile, lstat, mkdir, mkdtemp, open, readFile, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
+ import { homedir, tmpdir } from "node:os";
+ import { dirname, extname, isAbsolute, join, posix, relative, resolve, sep, win32 } from "node:path";
+@@ -1481,7 +1481,7 @@
+ * @returns true when at least one resolution directory holds the package.
+ */
+ function installedPackageExists(name) {
+-	return (require.resolve.paths(name) ?? []).some((directory) => lstatSync(join(directory, name), { throwIfNoEntry: false }) !== void 0);
++	return (require.resolve.paths(name) ?? []).some((directory) => existsSync(join(directory, name)));
+ }
+ /**
+ * Return the optional package target for the current process ABI.
+diff --git a/lib/cli.js b/lib/cli.js
+--- a/lib/cli.js
++++ b/lib/cli.js
+@@ -2,7 +2,7 @@
+ import { createRequire } from "node:module";
+ import { parseArgs } from "node:util";
+ import { dirname, extname, isAbsolute, join, posix, relative, resolve, sep, win32 } from "node:path";
+-import { closeSync, constants, createWriteStream, lstatSync, readSync, readdirSync } from "node:fs";
++import { closeSync, constants, createWriteStream, existsSync, readSync, readdirSync } from "node:fs";
+ import { copyFile, lstat, mkdir, mkdtemp, open, readFile, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
+ import { homedir, tmpdir } from "node:os";
+ import { Worker } from "node:worker_threads";
+@@ -1483,7 +1483,7 @@
+ * @returns true when at least one resolution directory holds the package.
+ */
+ function installedPackageExists(name) {
+-	return (require.resolve.paths(name) ?? []).some((directory) => lstatSync(join(directory, name), { throwIfNoEntry: false }) !== void 0);
++	return (require.resolve.paths(name) ?? []).some((directory) => existsSync(join(directory, name)));
+ }
+ /**
+ * Return the optional package target for the current process ABI.

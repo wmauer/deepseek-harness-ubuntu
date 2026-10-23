@@ -45,6 +45,13 @@ describe('concrete terminology policy', () => {
     }
   })
 
+  it('accepts the attestation action identifier but not prose beside it', () => {
+    const action = `actions/attest-build-${blockedTerm}@v3.0.0`
+    expect(findConcreteTermViolations('.github/workflows/example.yml', `        uses: ${action}\n`)).toEqual([])
+    expect(findConcreteTermViolations('.github/workflows/example.yml', `        uses: ${action} # records ${blockedTerm}\n`))
+      .toEqual([{ file: '.github/workflows/example.yml', line: 1 }])
+  })
+
   it('accepts exact replacement terms', () => {
     expect(findConcreteTermViolations(
       'packages/example/src/origin.ts',

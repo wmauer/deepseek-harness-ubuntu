@@ -8,12 +8,19 @@
 #   statically-linked-binary      The bundled CPython and native tools are built as relocatable archives.
 #   shared-library-lacks-prerequisites, library-not-linked-against-libc
 #                                 Private libraries resolve inside the bundle, not through the system linker.
-#   non-standard-dir-perm, non-standard-file-perm
+#   non-standard-dir-perm, non-standard-file-perm, shared-library-is-executable
 #                                 The runtime directory keeps upstream permissions; the maintainer script owns the sandbox bit.
+#   python3-script-but-no-python3-dep, missing-dep-for-interpreter
+#                                 Scripts inside the bundled runtime run under the bundled Node.js and CPython, not system interpreters.
+#   shell-script-fails-syntax-check
+#                                 python-build-standalone ships sh/Python polyglot launchers in its bin directory.
+#   package-installs-python-pycache-dir
+#                                 The bundled CPython standard library keeps its precompiled bytecode for startup time.
+#   custom-library-search-path    python-build-standalone's Tcl/Tk libraries carry their build RPATH; they load from the bundle.
 set -euo pipefail
 package=${1:?package path}
 report=${2:-}
-suppressed=dir-or-file-in-opt,embedded-library,unstripped-binary-or-object,statically-linked-binary,shared-library-lacks-prerequisites,library-not-linked-against-libc,non-standard-dir-perm,non-standard-file-perm
+suppressed=dir-or-file-in-opt,embedded-library,unstripped-binary-or-object,statically-linked-binary,shared-library-lacks-prerequisites,library-not-linked-against-libc,non-standard-dir-perm,non-standard-file-perm,shared-library-is-executable,python3-script-but-no-python3-dep,missing-dep-for-interpreter,shell-script-fails-syntax-check,package-installs-python-pycache-dir,custom-library-search-path
 status=0
 output=$(lintian --fail-on error --suppress-tags "$suppressed" --no-tag-display-limit --info "$package" 2>&1) || status=$?
 printf '%s\n' "$output"

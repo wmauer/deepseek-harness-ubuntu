@@ -42,8 +42,17 @@ export interface LinuxPackageReport {
 const REQUIRED_DEPENDS = ['ca-certificates', 'libasound2', 'libgbm1', 'libgtk-3-0', 'libnss3', 'libxkbcommon0', 'xdg-utils']
 
 /** Directories a package may populate; anything else is an ownership mistake. */
-const ALLOWED_PREFIXES = [`.${LINUX_INSTALL_ROOT}/`, './usr/share/applications/', './usr/share/icons/hicolor/', './usr/share/mime/']
-const ALLOWED_DIRECTORIES = new Set(['./', './opt/', './usr/', './usr/share/', './usr/share/applications/', './usr/share/icons/', './usr/share/icons/hicolor/', './usr/share/mime/'])
+const ALLOWED_PREFIXES = [`.${LINUX_INSTALL_ROOT}/`, './usr/share/applications/', `./usr/share/doc/${LINUX_PACKAGE_NAME}/`, './usr/share/icons/hicolor/', './usr/share/mime/']
+const ALLOWED_DIRECTORIES = new Set(['./', './opt/', './usr/', './usr/share/', './usr/share/applications/', './usr/share/doc/', './usr/share/icons/', './usr/share/icons/hicolor/', './usr/share/mime/'])
+
+/**
+ * Whether an archive owner column names root; fpm stores numeric ids without names, dpkg-deb stores the names.
+ * @param owner - `user/group` column of a `dpkg-deb --contents` row.
+ * @returns true for `root/root` and `0/0`.
+ */
+export function isRootOwner(owner: string): boolean {
+  return /^(?:root|0)\/(?:root|0)$/u.test(owner)
+}
 
 const REQUIRED_EXECUTABLES = [
   LINUX_EXECUTABLE_NAME, 'chrome-sandbox', 'resources/runtime/cli/bin/dsh', 'resources/runtime/bin/node',
@@ -171,7 +180,7 @@ export async function verifyLinuxPackage(packagePath: string, expectation: Linux
   if (entries.length === 0) fail('archive is empty')
   const byPath = new Map(entries.map(entry => [entry.path, entry]))
   for (const entry of entries) {
-    if (entry.owner !== 'root/root') fail(`${entry.path} is owned by ${entry.owner}`)
+    if (!isRootOwner(entry.owner)) fail(`${entry.path} is owned by ${entry.owner}`)
     if (/[sStT]/u.test(entry.mode)) fail(`${entry.path} carries a setuid, setgid or sticky bit; the maintainer script grants the sandbox bit on hosts that need it`)
     const directory = entry.mode.startsWith('d')
     if (directory ? !ALLOWED_DIRECTORIES.has(entry.path) && !ALLOWED_PREFIXES.some(prefix => entry.path.startsWith(prefix))
@@ -188,6 +197,7 @@ export async function verifyLinuxPackage(packagePath: string, expectation: Linux
     if (!installed(normalized).mode.startsWith('-')) fail(`${normalized} is not a regular file`)
   }
   if (byPath.get(`./usr/share/applications/${LINUX_DESKTOP_NAME}`) === undefined) fail('archive omits the desktop entry')
+  if (byPath.get(`./usr/share/doc/${LINUX_PACKAGE_NAME}/copyright`) === undefined) fail('archive omits the Debian copyright file')
   if (!entries.some(entry => /^\.\/usr\/share\/icons\/hicolor\/\d+x\d+\/apps\/deepseek-harness\.png$/u.test(entry.path))) {
     fail('archive omits the hicolor application icons')
   }

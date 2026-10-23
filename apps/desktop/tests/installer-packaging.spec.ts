@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { Arch, Platform } from 'electron-builder'
 import { Packager } from 'app-builder-lib'
 import { describe, expect, it, vi } from 'vitest'
+import { renderDebianCopyright } from '../scripts/linux-copyright.mjs'
 
 const { execute } = vi.hoisted(() => ({ execute: vi.fn(async () => undefined) }))
 vi.mock('node:child_process', async (importOriginal) => {
@@ -74,9 +75,14 @@ describe('installer preparation preserves application dependencies', () => {
       executableName: 'deepseek-harness', category: 'Development', syncDesktopName: true,
       maintainer: 'Example Team <packages@example.com>', target: [{ target: 'deb', arch: [arch] }],
     })
-    const deb = config.deb as { depends: readonly string[] }
+    const deb = config.deb as { depends: readonly string[]; fpm: readonly string[] }
     expect(deb).toMatchObject({ packageName: 'deepseek-harness', packageCategory: 'devel', priority: 'optional', compression: 'xz' })
     for (const name of ['libgtk-3-0', 'libnss3', 'libgbm1', 'libasound2', 'xdg-utils', 'ca-certificates']) expect(deb.depends).toContain(name)
+    expect(deb.fpm).toEqual([expect.stringMatching(/[\\/]copyright=\/usr\/share\/doc\/deepseek-harness\/copyright$/u)])
+    const copyright = renderDebianCopyright('MIT License\n\nCopyright (c) 2026 DeepSeek\n\nPermission is hereby granted.\n', { name: 'DeepSeek Harness', homepage: 'https://example.com/source', license: 'MIT' })
+    expect(copyright).toMatch(/^Format: https:\/\/www\.debian\.org\/doc\/packaging-manuals\/copyright-format\/1\.0\/\n/u)
+    expect(copyright).toContain('\nFiles: *\nCopyright: 2026 DeepSeek\nLicense: MIT\n MIT License\n .\n Copyright (c) 2026 DeepSeek\n')
+    expect(() => renderDebianCopyright('No holder\n', { name: 'x', homepage: 'y', license: 'MIT' })).toThrow(/copyright holder/u)
     expect(config.publish).toBeNull()
     expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
     expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}.${ext}')
