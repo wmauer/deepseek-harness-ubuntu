@@ -64,6 +64,28 @@ describe('installer preparation preserves application dependencies', () => {
     }
   })
 
+  it.each(['x64', 'arm64'] as const)('packages Linux %s as a Debian package without an update feed or policy', async (arch) => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const config = createElectronBuilderConfig({
+      DSH_DESKTOP_APP_ID: 'com.example.installer', DSH_DESKTOP_TARGET_PLATFORM: 'linux', DSH_DESKTOP_TARGET_ARCH: arch,
+      DSH_DESKTOP_UNSIGNED: '0', DSH_DESKTOP_LINUX_MAINTAINER: 'Example Team <packages@example.com>',
+    }, 'linux', arch)
+    expect(config.linux).toMatchObject({
+      executableName: 'deepseek-harness', category: 'Development', syncDesktopName: true,
+      maintainer: 'Example Team <packages@example.com>', target: [{ target: 'deb', arch: [arch] }],
+    })
+    const deb = config.deb as { depends: readonly string[] }
+    expect(deb).toMatchObject({ packageName: 'deepseek-harness', packageCategory: 'devel', priority: 'optional', compression: 'xz' })
+    for (const name of ['libgtk-3-0', 'libnss3', 'libgbm1', 'libasound2', 'xdg-utils', 'ca-certificates']) expect(deb.depends).toContain(name)
+    expect(config.publish).toBeNull()
+    expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
+    expect(config.artifactName).toBe('deepseek-harness-${version}-${os}-${arch}.${ext}')
+    expect(config.extraResources.some((resource: { to: string }) => resource.to === 'tray.ico')).toBe(false)
+    expect(() => createElectronBuilderConfig({
+      DSH_DESKTOP_APP_ID: 'com.example.installer', DSH_DESKTOP_TARGET_PLATFORM: 'linux', DSH_DESKTOP_TARGET_ARCH: arch, DSH_DESKTOP_UNSIGNED: '1',
+    }, 'linux', arch)).toThrow(/no code signature/u)
+  })
+
   it('names unsigned Windows artifacts so they cannot pass for release builds', async () => {
     const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
     const config = createElectronBuilderConfig({

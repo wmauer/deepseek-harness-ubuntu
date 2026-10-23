@@ -72,7 +72,15 @@ describe('desktop welcome window', () => {
       expect(options.backgroundColor).toBe('#FFFFFF')
       expect(options.vibrancy).toBeUndefined()
       expect(options.backgroundMaterial).toBeUndefined()
+      expect(options.icon).toBeUndefined()
     }
+  })
+
+  it('shows the product icon only where the window manager draws it', () => {
+    const presentation = { iconPath: '/opt/DeepSeek Harness/resources/icon.png' }
+    expect(welcomeWindowOptions('linux', resolveDesktopLocale('en-US'), presentation).icon).toBe(presentation.iconPath)
+    expect(welcomeWindowOptions('darwin', resolveDesktopLocale('en-US'), presentation).icon).toBeUndefined()
+    expect(welcomeWindowOptions('win32', resolveDesktopLocale('en-US'), presentation).icon).toBeUndefined()
   })
 
   it('waits for its local document and blocks renderer navigation', async () => {

@@ -17,6 +17,7 @@ description: "在本地或 Windows／macOS Actions 中生成 Desktop 安装包�
 - [配置与本地构建](#configuration-and-local-builds)
 - [Windows Actions 打包](#windows-actions)
 - [macOS 自托管打包](#macos-actions)
+- [Linux Actions 打包](#linux-actions)
 - [未签名 Windows 测试安装包](#unsigned-windows-test-installer)
 - [无发布签名的本地 macOS DMG](#local-macos-dmg-without-release-signing)
 - [macOS 发布签名与诊断](#macos-release-signing)
@@ -30,7 +31,7 @@ description: "在本地或 Windows／macOS Actions 中生成 Desktop 安装包�
 
 ## 选择打包方式
 
-安装锁定依赖后，从仓库根目录运行本地命令。本地构建使用平台命令，已注册的自托管 runner 使用对应平台的 Actions。test/production 部署与 signed/unsigned 模式分别选择。任何 Windows 签名构建或共享 runner 使用前，先阅读 [Windows 签名与 runner 运维](../windows-signing/README.zh.md#trust-and-isolation)。安装与打包分开进行；[发布](../publishing/README.zh.md)还需要单独的显式操作。
+安装锁定依赖后，从仓库根目录运行本地命令。本地构建使用平台命令，已注册的自托管 runner 使用对应平台的 Actions，Debian 包使用托管的 [Linux 工作流](#linux-actions)。test/production 部署与 signed/unsigned 模式分别选择。任何 Windows 签名构建或共享 runner 使用前，先阅读 [Windows 签名与 runner 运维](../windows-signing/README.zh.md#trust-and-isolation)。安装与打包分开进行；[发布](../publishing/README.zh.md)还需要单独的显式操作。
 
 <a id="release-versions"></a>
 
@@ -91,9 +92,11 @@ pnpm run package:desktop
 pnpm run package:desktop:mac:arm64
 pnpm run package:desktop:mac:x64
 pnpm run package:desktop:win:x64
+pnpm run package:desktop:linux:x64
+pnpm run package:desktop:linux:arm64
 ```
 
-macOS arm64 命令要求 Apple Silicon。macOS x64 命令可以在 Intel macOS 或带 Rosetta 的 Apple Silicon 上运行。Windows x64 命令要求 Windows x64。Linux 不是受支持的 Desktop 发布目标。
+macOS arm64 命令要求 Apple Silicon。macOS x64 命令可以在 Intel macOS 或带 Rosetta 的 Apple Silicon 上运行。Windows x64 命令要求 Windows x64。Linux 命令要求同架构的 Linux 主机，详见 [Linux Actions 打包](#linux-actions)。
 
 macOS 正式发布和本地未签名 DMG 都通过 [electron-builder 配置](../scripts/electron-builder-config.mjs)中的 `dmg.format: 'ULMO'` 使用 LZMA 压缩。[构建时补丁](../../../patches/app-builder-lib@26.17.0.patch)为固定版本 builder 的校验规则和 TypeScript 声明添加此格式。
 
@@ -133,6 +136,20 @@ bash apps/desktop/scripts/macos-runner-service.sh status "$HOME/dsh-ci/runner"
 ```
 
 安装脚本将启动脚本复制到 `runner/dsh-service`，将服务 PATH 设为 Node 24 和系统工具，并使用 GitHub 的 `svc.sh` 与 `runsvc.sh`。LaunchAgent 在 SSH 断开后继续运行，但重启后需要该账户登录桌面，注销桌面时停止。FileVault 磁盘解锁仍由操作人员完成，这不提供无人值守开机。日志位于 `runner/dsh-service/stdout.log` 和 `stderr.log`；验收时确认出现 `Connected to GitHub` 与 `Listening for Jobs`。更新已安装的启动脚本或工具路径时，等待 runner 空闲，依次执行 `stop`、`uninstall`，再重新安装。这两个操作都不会注销 runner 或删除打包凭据。卸载保留 `runner/dsh-service`（包括日志）和显式 `.path`；重新安装会替换启动快照和 PATH。
+
+<a id="linux-actions"></a>
+
+## Linux Actions 打包
+
+`Package Desktop · Linux` [工作流](../../../.github/workflows/linux-package.yml)在 GitHub 托管 runner 上为 Ubuntu 及 Debian 衍生发行版构建 Debian 包：amd64 使用 `ubuntu-24.04`，arm64 使用 `ubuntu-24.04-arm`，各自原生构建，因为运行时准备会在目标 Electron 下安装并冒烟测试载荷。它在手动触发（`architectures`、`version_mode`、`build_version`）和 `dsh-v*` 标签推送时运行，后者按产品版本打包两种架构。没有自托管 runner、机器 preset、签名硬件或发布步骤：Linux 包通过保留的工作流产物发布，安装是用户使用 `apt` 的显式操作。
+
+构建任何包之前，审计作业对锁定的生产依赖树运行 `pnpm audit --prod --audit-level=high`，并运行 [check-runtime-currency.ts](../scripts/check-runtime-currency.ts)，将内置的 Electron、primary runtime 的 Node.js 与 CPython 以及 pnpm 与各自上游发布线比较。落后于发布线的组件会使作业失败，除非 [config/runtime-currency.json](../config/runtime-currency.json) 记录了经审核的保留项，写明确切版本、原因和到期日期；Electron 还必须处于受支持的三个主版本之一，pnpm 只与早于配置最小发布时长的版本比较。
+
+随后每个打包作业检查配置和工具链（`--check`），运行完整打包流程，并分层验收结果。打包流程本身先对未打包应用运行载荷与 Host 冒烟，然后 [verify-linux-package.ts](../scripts/verify-linux-package.ts) 用 `dpkg-deb` 回读包：控制标识（名称、Debian 版本、架构、维护者、分类、优先级、主页、必需的 `Depends`）、归档内的 root 属主与无 setuid 位、允许的安装目录、可执行启动文件、`postinst` 与 `postrm` 脚本、桌面条目（`StartupWMClass`、`x-scheme-handler/dsh`、Development 分类）、AppArmor 配置文件，以及包内容与冒烟目录逐字节一致。工作流再运行 `lintian --fail-on error`，附带 [lintian-linux-package.sh](../scripts/lintian-linux-package.sh) 列出的 Electron 特有抑制项；用 `apt-get install` 安装该包，检查 `/usr/bin/deepseek-harness` alternative、桌面条目、沙箱辅助程序权限和内置的 `dsh --version` 启动器；用 [smoke-linux-desktop.ts](../scripts/smoke-linux-desktop.ts) 在 Xvfb 下启动已安装应用，直到 Host 打开欢迎窗口并干净退出；最后移除该包并检查没有残留。公开仓库还会为每个包生成构建来源证明。
+
+产物保留 14 天：`linux-<debian 架构>-<version>-<run_id>-<run_attempt>` 包含 `deepseek-harness-<version>-linux-<amd64|arm64>.deb`、`SHA256SUMS` 和 lintian 报告；`linux-<debian 架构>-package-logs-<run_id>-<run_attempt>` 包含打包诊断。Debian 版本把预发布连字符替换为 `~`，因此 `0.2.1-rc.2` 以 `0.2.1~rc.2` 安装并排在 `0.2.1` 之前。控制文件的 `Maintainer` 来自仓库变量 `DSH_DESKTOP_LINUX_MAINTAINER`，工作流将其写入 `apps/desktop/.env.linux`；未设置时包记录文档中说明的 `.invalid` 占位地址。
+
+本地在同架构的 Linux 主机上运行 `pnpm run package:desktop:linux:x64` 或 `:arm64` 可执行同一流程，需要安装 `dpkg-deb`、`ar`、`xz` 和 `tar`；electron-builder 自行下载固定版本的 `fpm` 工具集。可选的 [`.env.linux`](../.env.linux.example) 携带应用标识、维护者和 npm registry 镜像；其他发布设置均不适用，因为 Linux 包没有代码签名、更新源和强制更新策略。`--dir` 停在未打包的 `linux-unpacked` 或 `linux-arm64-unpacked` 目录，`--unsigned` 会被拒绝。打包后可对已安装的包运行 `pnpm --dir apps/desktop run smoke:linux-desktop --xvfb` 重复启动检查。
 
 <a id="unsigned-windows-test-installer"></a>
 

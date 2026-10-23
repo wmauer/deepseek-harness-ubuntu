@@ -18,11 +18,11 @@
   en: e9b22f232837e131
   zh: fc5f3834b969d2d2
 /deepseek-harness-desktop/terminal-command:
-  en: 5f2d25a1d8472647
-  zh: 2acb5c5d7d1917e2
+  en: e47dc4e0edbdb08f
+  zh: 5e01d6595d174e56
 /deepseek-harness-desktop/closing-the-window-and-quitting:
-  en: 24387a07ae4eb8e7
-  zh: 0119352685cf273c
+  en: b3df173c985ebb06
+  zh: f6ca1290d645869d
 /deepseek-harness-desktop/key-technical-decisions:
   en: 3724c53da4f7647b
   zh: 76ae549d43c99bb4
@@ -33,8 +33,8 @@
   en: 372297005b57a08b
   zh: 074a635ac17e4362
 /deepseek-harness-desktop/installation-ownership:
-  en: 22153a298a6662e1
-  zh: 3600803c8c9d0274
+  en: 523cb35c512d2370
+  zh: d27da4ac42b1698b
 /deepseek-harness-desktop/installation-ownership/runtime-and-plugin-activation:
   en: a1a47b09f4a72ba4
   zh: 7b1cf27f0b72cf31
@@ -51,8 +51,8 @@
   en: 617a89aeb28131b9
   zh: 4d84bd5d86501c86
 /deepseek-harness-desktop/package:
-  en: ac31ebdd9de54f34
-  zh: 921e534d5c4b3a16
+  en: 37fde45fc6fd6f9c
+  zh: 2de54abc2ab8be65
 /deepseek-harness-desktop/windows-installer-interface:
   en: 8cb4b7babbd8714d
   zh: b4aebc1d2d152e01
@@ -72,8 +72,8 @@
   en: 8264b135871e8978
   zh: 0939aafb1b2961fc
 /deepseek-harness-desktop/known-limitations:
-  en: c63d4dc7a9104954
-  zh: a4c676e5b46a6ac0
+  en: 24cd961b857f30cb
+  zh: 8d31429effb0902b
 /deepseek-harness-desktop/dev-note:
   en: 8e26b460ba31f21b
   zh: fbcd0307b3867125

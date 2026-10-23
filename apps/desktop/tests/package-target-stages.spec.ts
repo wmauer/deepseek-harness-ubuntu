@@ -68,6 +68,21 @@ it('requires one signing preflight before building, then records only the comple
   expect(record.publicUrl).toBe('https://updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/feeds/win-x64/')
 })
 
+it('packages Linux through the shared sequence, verifies the Debian package, and writes no release record', async () => {
+  const { run, stages } = supervisor()
+  await packageTarget(parseDesktopPackageInvocation(['linux-arm64'], 'linux', 'arm64'), { DSH_DESKTOP_APP_ID: 'com.example.test' }, run)
+  expect(stages[0]).toBe('run build:official')
+  expect(stages).toContain('run prepare:runtime')
+  expect(stages).toContain('run prepare:dsh')
+  expect(stages).toContain('exec electron-builder --config electron-builder.config.mjs --linux --arm64 --publish never')
+  expect(stages.slice(-2)).toEqual(['exec tsx scripts/smoke-packaged-runtime.ts', 'exec tsx scripts/verify-linux-package.ts'])
+  expect(stages.some(stage => stage.includes('sign:primary-runtime'))).toBe(false)
+  expect(withWindowsSigningStage).not.toHaveBeenCalled()
+  expect(writeFileSync).not.toHaveBeenCalled()
+  const builder = run.run.mock.calls.find(call => call[0].includes('electron-builder'))!
+  expect(builder[3].env).toMatchObject({ DSH_DESKTOP_TARGET_PLATFORM: 'linux', DSH_DESKTOP_TARGET_ARCH: 'arm64', DSH_DESKTOP_UNSIGNED: '0' })
+})
+
 it('initializes shared storage only after acquiring the preflight stage lock', async () => {
   const { run } = supervisor()
   vi.mocked(withWindowsSigningStage).mockImplementationOnce(async (_options, operation) => {

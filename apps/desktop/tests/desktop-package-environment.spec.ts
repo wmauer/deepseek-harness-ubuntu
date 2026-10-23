@@ -2,11 +2,13 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { loadDesktopPackageEnvironment, localMacOSPackageEnvironment, validateDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
+import { loadDesktopPackageEnvironment, localLinuxPackageEnvironment, localMacOSPackageEnvironment, validateDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
 import { resolveWindowsPackageSettings } from '../scripts/windows-package-settings.mjs'
+import { DEFAULT_LINUX_MAINTAINER, resolveLinuxPackageSettings } from '../scripts/linux-package-settings.mjs'
 
 const WINDOWS = { platform: 'win32', arch: 'x64' } as const
 const MACOS = { platform: 'darwin', arch: 'arm64' } as const
+const LINUX = { platform: 'linux', arch: 'x64' } as const
 const POLICY = { DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
   DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }) }
 const RELEASE = { ...POLICY, DSH_DESKTOP_APP_ID: 'com.example.desktop', DOWNLOAD_TEST_ORIGIN: 'https://updates.example.com',
@@ -40,6 +42,43 @@ describe('Desktop local packaging configuration', () => {
     expect(() => { validateDesktopPackageEnvironment(local, MACOS, { unsigned: true }) }).not.toThrow()
     expect(parent.DSH_DESKTOP_UNSIGNED).toBe('0')
     expect(parent.DSH_DESKTOP_APP_ID).toBe('com.example.release')
+  })
+
+  it('selects Linux defaults, reads only identity fields from the optional file, and excludes ambient release settings', async () => {
+    await withDirectory(async (directory) => {
+      const parent = {
+        PATH: 'build-tools', DSH_DESKTOP_NPM_REGISTRY: 'https://registry.npmmirror.com',
+        DSH_DESKTOP_APP_ID: 'com.example.release', DSH_DESKTOP_LINUX_MAINTAINER: 'Ambient <ambient@example.com>',
+        DSH_DESKTOP_AUTO_UPDATE_ENV: 'production', DOWNLOAD_PROD_COS_SECRET_KEY: 'unused-secret', CSC_LINK: 'missing.p12',
+      }
+      const local = localLinuxPackageEnvironment(parent, directory)
+      expect(local).toEqual({
+        PATH: 'build-tools', DSH_DESKTOP_NPM_REGISTRY: 'https://registry.npmmirror.com',
+        DSH_DESKTOP_APP_ID: 'com.deepseek.harness', DSH_DESKTOP_UNSIGNED: '0',
+      })
+      expect(() => { validateDesktopPackageEnvironment(local, LINUX) }).not.toThrow()
+      expect(resolveLinuxPackageSettings(local).maintainer).toBe(DEFAULT_LINUX_MAINTAINER)
+      await writeFile(join(directory, '.env.linux'), 'DSH_DESKTOP_APP_ID=com.example.linux\nDSH_DESKTOP_LINUX_MAINTAINER="Example Team <packages@example.com>"\n')
+      const configured = localLinuxPackageEnvironment(parent, directory)
+      expect(configured).toMatchObject({ DSH_DESKTOP_APP_ID: 'com.example.linux', DSH_DESKTOP_LINUX_MAINTAINER: 'Example Team <packages@example.com>' })
+      expect(resolveLinuxPackageSettings(configured).maintainer).toBe('Example Team <packages@example.com>')
+      await writeFile(join(directory, '.env.linux'), 'DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN=https://policy.example.com\n')
+      expect(() => localLinuxPackageEnvironment(parent, directory)).toThrow(/unsupported setting DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN/u)
+      expect(parent.DSH_DESKTOP_APP_ID).toBe('com.example.release')
+    })
+  })
+
+  it.each(['no-address', 'Name <not-an-address>', 'Name <two@example.com> <more@example.com>', '<only@example.com>'])(
+    'rejects the Linux maintainer %s before packaging', (maintainer) => {
+      expect(() => { validateDesktopPackageEnvironment({ DSH_DESKTOP_APP_ID: 'com.example.linux', DSH_DESKTOP_LINUX_MAINTAINER: maintainer }, LINUX) })
+        .toThrow(/DSH_DESKTOP_LINUX_MAINTAINER/u)
+    })
+
+  it('rejects signing modes for Linux packages, which carry no code signature', () => {
+    const environment = { DSH_DESKTOP_APP_ID: 'com.example.linux' }
+    expect(() => { validateDesktopPackageEnvironment(environment, LINUX, { unsigned: true }) }).toThrow(/no code signature/u)
+    expect(() => { validateDesktopPackageEnvironment(environment, LINUX, { skipNotarization: true }) }).toThrow(/no code signature/u)
+    expect(() => { validateDesktopPackageEnvironment(environment, LINUX, { prepareOnly: true }) }).not.toThrow()
   })
 
   it('takes cache concurrency from the Windows file and defaults to four without ambient overrides', async () => {

@@ -7,13 +7,22 @@ import { app, BrowserWindow, ipcMain, type BrowserWindowConstructorOptions, type
 import type { DesktopLocale } from './locale.ts'
 import { WELCOME_IPC, type WelcomeOperations } from './welcome-api.ts'
 
+/** Shell-supplied presentation inputs the welcome window cannot derive itself. */
+export interface WelcomeWindowPresentation {
+  /** Product bitmap for the Linux taskbar and window switcher; other platforms draw their bundle icon. */
+  readonly iconPath?: string
+}
+
 /**
  * Resolve the fixed-size welcome window's native material and controls.
  * @param platform - operating system hosting Electron.
  * @param locale - shell-owned localized copy.
+ * @param presentation - icon the Linux window manager displays.
  * @returns sandboxed window options with a locale-only preload.
  */
-export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopLocale): BrowserWindowConstructorOptions {
+export function welcomeWindowOptions(
+  platform: NodeJS.Platform, locale: DesktopLocale, presentation: WelcomeWindowPresentation = {},
+): BrowserWindowConstructorOptions {
   return {
     width: 600,
     height: 700,
@@ -36,6 +45,7 @@ export function welcomeWindowOptions(platform: NodeJS.Platform, locale: DesktopL
       titleBarOverlay: { color: '#00000000', symbolColor: '#0F1115', height: 42 },
       backgroundMaterial: 'acrylic',
     } as const : {}),
+    ...(platform === 'linux' && presentation.iconPath !== undefined ? { icon: presentation.iconPath } : {}),
     webPreferences: {
       preload: fileURLToPath(new URL('./preload-welcome.cjs', import.meta.url)),
       additionalArguments: [`--dsh-welcome-locale=${locale.id}`],
@@ -54,10 +64,13 @@ let disposeActiveHandlers: (() => void) | undefined
  * Replaces IPC ownership immediately; the caller closes the previous native window.
  * @param locale - shell-owned localized copy.
  * @param operations - credential write and this-launch-only skip actions.
+ * @param presentation - icon the Linux window manager displays.
  * @returns the visible window; a failed load destroys it before rejecting.
  */
-export async function openWelcomeWindow(locale: DesktopLocale, operations: WelcomeOperations): Promise<BrowserWindow> {
-  const options = welcomeWindowOptions(process.platform, locale)
+export async function openWelcomeWindow(
+  locale: DesktopLocale, operations: WelcomeOperations, presentation: WelcomeWindowPresentation = {},
+): Promise<BrowserWindow> {
+  const options = welcomeWindowOptions(process.platform, locale, presentation)
   const window = new BrowserWindow(options)
   disposeActiveHandlers?.()
   let active = true

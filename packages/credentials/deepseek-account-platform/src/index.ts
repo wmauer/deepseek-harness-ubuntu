@@ -51,7 +51,7 @@ export interface Config {
 /** Validated deployment choices. */
 export const Config = Schema.object({
   platformOrigin: Schema.string().default('https://platform.deepseek.com'),
-  desktopPlatform: Schema.union([Schema.const('darwin'), Schema.const('win32'), Schema.const(null)]).default(null),
+  desktopPlatform: Schema.union([Schema.const('darwin'), Schema.const('win32'), Schema.const('linux'), Schema.const(null)]).default(null),
   embeddedPageDist: Schema.string().default(''),
   inferenceOrigin: Schema.string().default('https://api.deepseek.com'),
   allowLoopbackHttp: Schema.boolean().default(false),
@@ -88,7 +88,7 @@ export class PlatformAccount extends DeepSeekAccount {
   private readonly embeddedPageDist: string
   private readonly inferenceOrigin: string
   private readonly rewriteBrowserOrigin: boolean
-  private readonly platform: 'darwin' | 'win32' | null
+  private readonly platform: 'darwin' | 'win32' | 'linux' | null
   private readonly requestHeaders: Record<string, string>
   private readonly accountRequestHeaders: Record<string, string>
   private readonly requestTimeout: number

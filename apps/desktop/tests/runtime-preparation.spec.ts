@@ -1,6 +1,6 @@
 /** Desktop resource preparation publishes versions only for complete resources. */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
   root: '',
-  target: 'mac-arm64' as 'mac-arm64' | 'mac-x64' | 'win-x64',
+  target: 'mac-arm64' as 'mac-arm64' | 'mac-x64' | 'win-x64' | 'linux-x64' | 'linux-arm64',
   pnpm: '11.7.0' as string | undefined,
   failure: undefined as 'electron' | 'primary' | 'cli' | undefined,
   preparePrimary: vi.fn(),
@@ -61,8 +61,8 @@ beforeEach(() => {
     mkdirSync(pnpm, { recursive: true })
     writeFileSync(join(pnpm, 'pnpm.mjs'), '')
     writeFileSync(join(root, 'runtime.json'), JSON.stringify({
-      desktopVersion: '1.0.0', platform: state.target === 'win-x64' ? 'win32' : 'darwin',
-      arch: state.target === 'mac-arm64' ? 'arm64' : 'x64',
+      desktopVersion: '1.0.0', platform: state.target === 'win-x64' ? 'win32' : state.target.startsWith('linux-') ? 'linux' : 'darwin',
+      arch: state.target.endsWith('-arm64') ? 'arm64' : 'x64',
       python: '3.12.14', node: '24.17.0', pnpm: state.pnpm, pythonPackages: { numpy: '2.3.5' },
     }))
   })
@@ -74,9 +74,10 @@ afterEach(async () => {
   await rm(state.root, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 })
 })
 
-it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('prepares %s with one pnpm distribution and its CLI resources', async (target) => {
+it.each(['mac-arm64', 'mac-x64', 'win-x64', 'linux-x64', 'linux-arm64'] as const)('prepares %s with one pnpm distribution and its CLI resources', async (target) => {
   state.target = target
   const windows = target === 'win-x64'
+  const mac = target.startsWith('mac-')
   if (windows) process.argv.push('--defer-primary-runtime-smoke')
   const runtime = join(state.root, 'runtime')
   mkdirSync(join(runtime, 'pnpm'), { recursive: true })
@@ -91,8 +92,11 @@ it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('prepares %s with one pnpm
     schemaVersion: 1, node: '24.18.1', pnpm: '11.7.0',
   })
   expect(state.preparePrimary).toHaveBeenCalledWith({ deferSmoke: windows })
-  if (windows) expect(state.commandLink).not.toHaveBeenCalled()
-  else expect(state.commandLink).toHaveBeenCalledWith(join(runtime, 'cli'), target === 'mac-arm64' ? 'arm64' : 'x64', '12.0')
+  // Only macOS compiles the exact-path link helper; Linux link() already preserves symbolic links.
+  if (mac) expect(state.commandLink).toHaveBeenCalledWith(join(runtime, 'cli'), target === 'mac-arm64' ? 'arm64' : 'x64', '12.0')
+  else expect(state.commandLink).not.toHaveBeenCalled()
+  if (!windows) expect(statSync(join(runtime, 'cli', 'bin', 'dsh')).mode & 0o111).not.toBe(0)
+  if (target.startsWith('linux-')) expect(readFileSync(join(runtime, 'cli', 'bin', 'dsh'), 'utf8')).toContain('/../deepseek-harness')
 })
 
 it.each([

@@ -67,6 +67,24 @@ describe('desktop toolchain preflight', () => {
     }
   })
 
+  it.skipIf(process.platform !== 'linux')('passes on a Linux host with the Debian packaging tools', async () => {
+    expect(await probeDesktopToolchain('linux', {})).toEqual([])
+  })
+
+  it('reports every Debian packaging tool the host cannot run', async () => {
+    const empty = await mkdtemp(join(tmpdir(), 'dsh-no-deb-tools-'))
+    directories.push(empty)
+    const saved = { PATH: process.env.PATH, Path: process.env.Path }
+    try {
+      Object.assign(process.env, { PATH: empty, Path: empty })
+      const failures = await probeDesktopToolchain('linux', {})
+      expect(failures.map(failure => failure.tool)).toEqual(['tar', 'dpkg-deb', 'ar', 'xz'])
+    }
+    finally {
+      Object.assign(process.env, saved)
+    }
+  })
+
   it('reports the Windows installer compiler when the host cannot locate Visual Studio', async () => {
     const failures = await probeDesktopToolchain('win32', {})
     expect(failures.map(failure => failure.tool)).toContain('vswhere')

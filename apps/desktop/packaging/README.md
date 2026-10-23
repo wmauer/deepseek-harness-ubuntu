@@ -17,6 +17,7 @@ Build Desktop installers locally or through Windows or macOS Actions, choose dep
 - [Configuration and local builds](#configuration-and-local-builds)
 - [Windows Actions packaging](#windows-actions)
 - [macOS self-hosted packaging](#macos-actions)
+- [Linux Actions packaging](#linux-actions)
 - [Unsigned Windows test installer](#unsigned-windows-test-installer)
 - [Local macOS DMG without release signing](#local-macos-dmg-without-release-signing)
 - [macOS release signing and diagnostics](#macos-release-signing)
@@ -30,7 +31,7 @@ Build Desktop installers locally or through Windows or macOS Actions, choose dep
 
 ## Choose a build path
 
-Run local commands from the repository root after installing locked dependencies. Use platform-specific commands for a local build, or platform Actions for the registered self-hosted runner. Choose test or production deployment independently from signed or unsigned mode. Read [Windows signing and runner operations](../windows-signing/README.md#trust-and-isolation) before any Windows signed build or shared-runner use. Installation is separate from packaging; [publication](../publishing/README.md) is a further explicit operation.
+Run local commands from the repository root after installing locked dependencies. Use platform-specific commands for a local build, platform Actions for the registered self-hosted runner, or the hosted [Linux workflow](#linux-actions) for Debian packages. Choose test or production deployment independently from signed or unsigned mode. Read [Windows signing and runner operations](../windows-signing/README.md#trust-and-isolation) before any Windows signed build or shared-runner use. Installation is separate from packaging; [publication](../publishing/README.md) is a further explicit operation.
 
 <a id="release-versions"></a>
 
@@ -91,9 +92,11 @@ Release automation uses fixed target commands so runtime preparation, dsh prepar
 pnpm run package:desktop:mac:arm64
 pnpm run package:desktop:mac:x64
 pnpm run package:desktop:win:x64
+pnpm run package:desktop:linux:x64
+pnpm run package:desktop:linux:arm64
 ```
 
-The macOS arm64 command requires Apple Silicon. The macOS x64 command runs on Intel macOS or Apple Silicon with Rosetta. The Windows x64 command requires Windows x64. Linux is not a supported Desktop release target.
+The macOS arm64 command requires Apple Silicon. The macOS x64 command runs on Intel macOS or Apple Silicon with Rosetta. The Windows x64 command requires Windows x64. The Linux commands require a Linux host of the same architecture and are described under [Linux Actions packaging](#linux-actions).
 
 Both release and local unsigned macOS DMGs use LZMA compression (`dmg.format: 'ULMO'`) in [the electron-builder configuration](../scripts/electron-builder-config.mjs). A [build-time patch](../../../patches/app-builder-lib@26.17.0.patch) adds this format to the pinned builder's validation and TypeScript declarations.
 
@@ -133,6 +136,20 @@ bash apps/desktop/scripts/macos-runner-service.sh status "$HOME/dsh-ci/runner"
 ```
 
 The installer copies its startup script into `runner/dsh-service`, sets the service PATH to Node 24 plus system tools, and uses GitHub's `svc.sh` and `runsvc.sh`. The LaunchAgent survives SSH disconnection, but requires that account's desktop login after reboot and stops on desktop logout. FileVault disk unlock remains an operator step; this does not provide unattended boot. Logs are `runner/dsh-service/stdout.log` and `stderr.log`; verify `Connected to GitHub` and `Listening for Jobs`. To update installed startup code or tool paths, wait until the runner is idle, run `stop`, then `uninstall`, and repeat installation. Neither action unregisters the runner or removes packaging credentials. Uninstall retains `runner/dsh-service` (including logs) and the explicit `.path`; reinstall replaces the startup snapshot and PATH.
+
+<a id="linux-actions"></a>
+
+## Linux Actions packaging
+
+The `Package Desktop · Linux` [workflow](../../../.github/workflows/linux-package.yml) builds Debian packages for Ubuntu and Debian derivatives on GitHub-hosted runners: `ubuntu-24.04` for amd64 and `ubuntu-24.04-arm` for arm64, each natively, because runtime preparation installs and smoke-tests the payload under the target Electron. It runs on manual dispatch (`architectures`, `version_mode`, `build_version`) and on `dsh-v*` tag pushes, which package the product version for both architectures. There is no self-hosted runner, machine preset, signing hardware, or publication step: Linux packages publish through the retained workflow artifacts, and installing them is an explicit user action with `apt`.
+
+Before any package is built, an audit job runs `pnpm audit --prod --audit-level=high` against the locked production tree and [check-runtime-currency.ts](../scripts/check-runtime-currency.ts), which compares the bundled Electron, primary-runtime Node.js and CPython, and pnpm against their upstream release lines. A component behind its line fails the job unless [config/runtime-currency.json](../config/runtime-currency.json) records a reviewed hold naming the exact version, a reason, and an expiry date; Electron must also be on one of the three supported majors, and pnpm is compared only against releases older than the configured minimum release age.
+
+Each package job then checks the configuration and toolchain (`--check`), runs the full packaging sequence, and verifies the result in layers. The packaging sequence itself runs the payload and Host smoke against the unpacked application, then [verify-linux-package.ts](../scripts/verify-linux-package.ts) reads the package back with `dpkg-deb`: control identity (name, Debian version, architecture, maintainer, section, priority, homepage, required `Depends`), root ownership and the absence of setuid bits in the archive, the allowed install directories, the executable launcher files, the `postinst` and `postrm` scripts, the desktop entry (`StartupWMClass`, `x-scheme-handler/dsh`, Development category), the AppArmor profile, and byte-for-byte parity between the package contents and the smoke-tested directory. The workflow adds `lintian --fail-on error` with the Electron-specific suppressions listed in [lintian-linux-package.sh](../scripts/lintian-linux-package.sh), installs the package with `apt-get install`, checks the `/usr/bin/deepseek-harness` alternative, the desktop entry, the sandbox helper permissions, and the bundled `dsh --version` launcher, launches the installed application under Xvfb with [smoke-linux-desktop.ts](../scripts/smoke-linux-desktop.ts) until the Host opens the welcome window and quits it cleanly, and removes the package again, checking that nothing stays behind. Public repositories additionally receive a GitHub artifact attestation for each package.
+
+Artifacts are retained for 14 days: `linux-<debian arch>-<version>-<run_id>-<run_attempt>` holds `deepseek-harness-<version>-linux-<amd64|arm64>.deb` with `SHA256SUMS` and the lintian report, and `linux-<debian arch>-package-logs-<run_id>-<run_attempt>` holds the packaging diagnostics. The Debian version replaces prerelease hyphens with `~`, so `0.2.1-rc.2` installs as `0.2.1~rc.2` and sorts below `0.2.1`. The control `Maintainer` comes from the `DSH_DESKTOP_LINUX_MAINTAINER` repository variable, which the workflow writes into `apps/desktop/.env.linux`; without it the package records the documented `.invalid` placeholder address.
+
+Locally, `pnpm run package:desktop:linux:x64` or `:arm64` runs the same sequence on a Linux host of that architecture with `dpkg-deb`, `ar`, `xz`, and `tar` installed; electron-builder downloads its pinned `fpm` toolset. The optional [`.env.linux`](../.env.linux.example) carries the application identifier, the maintainer, and an npm registry mirror; no other release setting applies because Linux packages carry no code signature, update feed, or mandatory-update policy. `--dir` stops at the unpacked `linux-unpacked` or `linux-arm64-unpacked` directory, and `--unsigned` is rejected. After packaging, run `pnpm --dir apps/desktop run smoke:linux-desktop --xvfb` against an installed package to repeat the launch check.
 
 <a id="unsigned-windows-test-installer"></a>
 

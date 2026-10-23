@@ -1007,11 +1007,12 @@ describe('desktop main startup', () => {
     if (template === undefined) throw new Error('application menu missing')
     expect(template.map(describeItem)).toEqual(platform === 'darwin'
       ? ['Desktop test', en.fileMenu, 'editMenu', 'windowMenu']
-      : ['Application', 'editMenu'])
+      : ['Application', en.fileMenu, 'editMenu'])
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
     expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'
       ? ['about', 'separator', en.checkUpdatesMenu, en.cliCommandMenu, 'separator', 'hide', 'hideOthers', 'unhide', 'separator', 'quit']
-      : ['about', 'separator', en.checkUpdatesMenu, 'separator', 'quit'])
+      : ['about', 'separator', en.checkUpdatesMenu, en.cliCommandMenu, 'separator', 'quit'])
+    expect(application.find(item => item.role === 'quit')?.label).toBe(en.quitApplication)
     expect(harness.menu.setApplicationMenu).toHaveBeenCalledOnce()
   })
 
@@ -1318,6 +1319,26 @@ describe('desktop main startup', () => {
     expect(window.show).toHaveBeenCalledOnce()
     harness.app.emit('activate', {}, true)
     expect(window.show).toHaveBeenCalledOnce()
+  })
+
+  it('quits through the ordinary confirmation when the Linux window closes and draws the product icon', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux', arch: 'x64', resourcesPath: 'desktop-test-resources' })
+    const host = await readyWorkspace()
+    const window = harness.windows[0]!
+    expect(harness.trays).toHaveLength(0)
+    expect(window.options).toMatchObject({ icon: join('desktop-test-resources', 'icon.png'), backgroundColor: '#f9fafb' })
+    window.close()
+    expect(window.isDestroyed()).toBe(false)
+    expect(harness.backgroundNotice.close).not.toHaveBeenCalled()
+    expect(harness.app.quit).toHaveBeenCalledOnce()
+    // Nothing to interrupt means no dialog; the quit then stops the Host like every other quit entry.
+    await vi.advanceTimersByTimeAsync(0)
+    expect(host.inspectQuit).toHaveBeenCalledOnce()
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    await host.stopping.promise
+    host.exited.resolve()
+    await harness.quitCompleted.promise
+    expect(host.stop).toHaveBeenCalledOnce()
   })
 
   it('skips the confirmation during a macOS shutdown but asks again once a cancelled shutdown returns focus', async () => {

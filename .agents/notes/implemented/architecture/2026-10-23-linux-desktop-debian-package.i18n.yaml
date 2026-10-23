@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-23-linux-desktop-debian-package.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-23-linux-desktop-debian-package.md
+/agent-note-ship-desktop-for-ubuntu-as-a-debian-package-built-on-hosted-runners:
+  en: 014dcbbeff560515
+  zh: 7bdb0db5d1290d70
+/agent-note-ship-desktop-for-ubuntu-as-a-debian-package-built-on-hosted-runners/problem:
+  en: d8bbd8ec4d0d4bda
+  zh: 78a123dd1bbafa36
+/agent-note-ship-desktop-for-ubuntu-as-a-debian-package-built-on-hosted-runners/decision:
+  en: 09fcf529962996bd
+  zh: d87169608e1a0cfb
+/agent-note-ship-desktop-for-ubuntu-as-a-debian-package-built-on-hosted-runners/verification:
+  en: f415ce2196aba94e
+  zh: 0e2f7ce71259341d
+/agent-note-ship-desktop-for-ubuntu-as-a-debian-package-built-on-hosted-runners/alternatives-considered:
+  en: 0c8ae61eec795a83
+  zh: 58e8121fc20f0191
+/agent-note-ship-desktop-for-ubuntu-as-a-debian-package-built-on-hosted-runners/consequences:
+  en: e6c65185d05fefa7
+  zh: 2c8c1ddd3eee3a50

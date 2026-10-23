@@ -34,6 +34,8 @@ export function desktopReleasesRoot(env: NodeJS.ProcessEnv): string {
  */
 export async function retainDesktopCi(env: NodeJS.ProcessEnv, appRoot = resolve(import.meta.dirname, '..')): Promise<string> {
   const target = resolveDesktopBuildTarget(env)
+  // Linux packages are retained by the workflow's own artifact upload, not a machine release store.
+  if (target === 'linux-x64' || target === 'linux-arm64') throw new Error('desktop retention: Linux packages have no machine release store')
   const windows = target === 'win-x64'
   const platform = windows ? 'win32' : 'darwin'
   const settings = loadDesktopPackageEnvironment(platform, env, appRoot, { unsigned: true })

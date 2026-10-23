@@ -1,4 +1,4 @@
-/** Private command-management worker; macOS mutation targets are fixed before elevation. */
+/** Private command-management worker; macOS and Linux mutation targets are fixed before elevation. */
 
 import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
@@ -9,12 +9,13 @@ const [operation, expected] = process.argv.slice(2)
 const fingerprint = expected ?? ''
 const resources = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 // This dedicated worker writes public command ownership metadata, not user secrets.
-if (process.platform === 'darwin') process.umask(0o022)
+if (process.platform !== 'win32') process.umask(0o022)
 
 try {
   if (!['inspect', 'install', 'remove'].includes(operation ?? '')) throw new CommandInstallationError('EINVAL', 'Invalid command-management operation.')
   if (operation !== 'inspect' && !/^[a-f0-9]{64}$/u.test(fingerprint)) throw new CommandInstallationError('EINVAL', 'Missing command confirmation.')
-  if (process.platform === 'darwin') {
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    // Linux link() never follows symbolic links, so only macOS needs the compiled helper.
     const options = { destination: '/usr/local/bin/dsh', launcher: join(resources, 'runtime', 'cli', 'bin', 'dsh'),
       linkHelper: join(resources, 'runtime', 'cli', 'link-entry') }
     const state = operation === 'inspect' ? await inspectFileCommand(options)
@@ -34,7 +35,7 @@ try {
     child.stdin.end(JSON.stringify({ operation, expected, directory: join(resources, 'runtime', 'cli', 'bin') }))
     process.exitCode = await exited ?? 1
   } else {
-    throw new CommandInstallationError('EUNSUPPORTED', 'Command installation is supported on macOS and Windows.')
+    throw new CommandInstallationError('EUNSUPPORTED', 'Command installation is supported on macOS, Windows, and Linux.')
   }
 } catch (error) {
   // osascript preserves stdout only when the command exits successfully; the response owns operation failures.

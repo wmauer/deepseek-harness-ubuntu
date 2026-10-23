@@ -24,6 +24,8 @@ import { resolveDesktopBuildCommit } from './desktop-build-commit.mjs'
 import { resolveDesktopBuildVersion } from './desktop-build-version.mjs'
 import { resolveDesktopPolicyEnvironment } from './desktop-policy-environment.mjs'
 import { desktopArtifactOutput, desktopTargetBuildPaths, resolveDesktopBuildTarget } from './desktop-build-paths.mjs'
+import { resolveLinuxPackageSettings } from './linux-package-settings.mjs'
+import { LINUX_EXECUTABLE_NAME, LINUX_PACKAGE_NAME } from './linux-package-paths.mjs'
 import { installWindowsDirectoryInstaller } from './windows-directory-installer.mjs'
 import { preserveWindowsRuntimeSignature, signWindowsCode } from './windows-runtime-signature.mjs'
 import { prepareWindowsAsarUnpack, verifyWindowsAsarUnpack } from './windows-asar-unpack.mjs'
@@ -65,7 +67,11 @@ export function createElectronBuilderConfig(
   if (skipNotarization && (unsigned || resolvedPlatform !== 'darwin')) throw new Error('Skipping notarization requires a signed macOS build')
   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
   const packagesWindows = resolvedPlatform === 'win32'
-  const policy = packagesMacOS && unsigned ? undefined : resolveDesktopPolicyEnvironment(env)
+  const packagesLinux = resolvedPlatform === 'linux'
+  if (packagesLinux && unsigned) throw new Error('desktop package: Linux packages carry no code signature; omit DSH_DESKTOP_UNSIGNED')
+  // Linux packages publish through workflow artifacts, without an update feed or a mandatory-update policy.
+  const policy = (packagesMacOS && unsigned) || packagesLinux ? undefined : resolveDesktopPolicyEnvironment(env)
+  const linuxSettings = packagesLinux ? resolveLinuxPackageSettings(env) : undefined
   if (resolvedPlatform === 'win32') installWindowsDirectoryInstaller()
   const macOSSigning = packagesMacOS && !unsigned ? resolveMacOSSigningEnvironment(env) : undefined
   if (packagesMacOS && !unsigned && !skipNotarization) resolveMacOSNotarizationEnvironment(env)
@@ -95,7 +101,7 @@ export function createElectronBuilderConfig(
   if (windowsSigner !== undefined) {
     installWindowsNsisBootstrapSigner({ sign: windowsSigner })
   }
-  const update = unsigned ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
+  const update = unsigned || packagesLinux ? undefined : resolveDesktopAutoUpdateConfig(env, resolvedPlatform, resolvedArch)
   if (preparedRuntime !== undefined) buildPaths.dsh = preparedRuntime
   // electron-builder merges extraMetadata into the packaged manifest, so a build version here reaches
   // the artifact names, the update feed, and the installed app.getVersion() the updater compares against.
@@ -152,6 +158,7 @@ export function createElectronBuilderConfig(
     asarUnpack: unpack,
     extraResources: [
       { from: buildPaths.runtime, to: 'runtime' },
+      // The rounded-square bitmap serves the Windows and Linux About panels; macOS keeps its bundle icon.
       { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
       // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
       ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
@@ -246,8 +253,33 @@ export function createElectronBuilderConfig(
       target: ['nsis'],
     },
     linux: {
+      // electron-builder derives the hicolor icon set from this bitmap; the window uses the same art.
+      icon: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)),
       category: 'Development',
-      target: ['AppImage'],
+      executableName: LINUX_EXECUTABLE_NAME,
+      synopsis: 'DeepSeek Harness desktop application',
+      description: 'Open-source agent harness from DeepSeek AI with a bundled dsh runtime, Web UI, and plugin management.',
+      maintainer: linuxSettings?.maintainer,
+      vendor: 'DeepSeek AI',
+      // Electron reads desktopName from the manifest as its application id; the entry file carries the same name.
+      syncDesktopName: true,
+      desktop: { entry: { Keywords: 'AI;Agent;DeepSeek;Harness;', StartupNotify: 'true' } },
+      target: [{ target: 'deb', arch: [resolvedArch] }],
+    },
+    deb: {
+      packageName: LINUX_PACKAGE_NAME,
+      packageCategory: 'devel',
+      priority: 'optional',
+      compression: 'xz',
+      // Runtime libraries Electron loads on Ubuntu 22.04+ and Debian 12+; the t64 packages provide these names.
+      depends: [
+        'ca-certificates', 'libasound2', 'libatk-bridge2.0-0', 'libatk1.0-0', 'libatspi2.0-0', 'libc6', 'libcairo2',
+        'libcups2', 'libdbus-1-3', 'libdrm2', 'libexpat1', 'libgbm1', 'libglib2.0-0', 'libgtk-3-0', 'libnotify4',
+        'libnspr4', 'libnss3', 'libpango-1.0-0', 'libsecret-1-0', 'libuuid1', 'libx11-6', 'libxcb1', 'libxcomposite1',
+        'libxdamage1', 'libxext6', 'libxfixes3', 'libxkbcommon0', 'libxrandr2', 'libxss1', 'libxtst6', 'xdg-utils',
+      ],
+      // The sandbox provider prefers bubblewrap before its Landlock fallback; the tray is not used on Linux.
+      recommends: ['bubblewrap'],
     },
     nsis: {
       installerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),

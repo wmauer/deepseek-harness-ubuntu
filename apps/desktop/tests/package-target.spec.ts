@@ -19,6 +19,12 @@ describe('desktop package target', () => {
     expect(resolveDesktopPackageTarget('win-x64', 'win32', 'x64')).toMatchObject({
       platform: 'win32', arch: 'x64', builderPlatform: '--win', builderArch: '--x64',
     })
+    expect(resolveDesktopPackageTarget('linux-x64', 'linux', 'x64')).toMatchObject({
+      platform: 'linux', arch: 'x64', builderPlatform: '--linux', builderArch: '--x64',
+    })
+    expect(resolveDesktopPackageTarget('linux-arm64', 'linux', 'arm64')).toMatchObject({
+      platform: 'linux', arch: 'arm64', builderPlatform: '--linux', builderArch: '--arm64',
+    })
   })
 
   it('allows an Apple Silicon host to build the Intel target through Rosetta', () => {
@@ -26,7 +32,11 @@ describe('desktop package target', () => {
   })
 
   it('rejects unsupported targets and hosts before building', () => {
-    expect(() => resolveDesktopPackageTarget('linux-x64', 'linux', 'x64')).toThrow(/unsupported target/u)
+    expect(() => resolveDesktopPackageTarget('freebsd-x64', 'linux', 'x64')).toThrow(/unsupported target/u)
+    // Linux preparation runs the target Electron, so each architecture builds on its own host.
+    expect(() => resolveDesktopPackageTarget('linux-arm64', 'linux', 'x64')).toThrow(/Linux arm64 build host/u)
+    expect(() => resolveDesktopPackageTarget('linux-x64', 'linux', 'arm64')).toThrow(/Linux x64 build host/u)
+    expect(() => resolveDesktopPackageTarget('linux-x64', 'darwin', 'x64')).toThrow(/Linux x64 build host/u)
     expect(() => resolveDesktopPackageTarget('win-x64', 'darwin', 'arm64')).toThrow(/Windows x64/u)
     expect(() => resolveDesktopPackageTarget('mac-arm64', 'darwin', 'x64')).toThrow(/Apple Silicon/u)
     expect(() => resolveDesktopPackageTarget('mac-arm64', 'linux', 'arm64')).toThrow(/macOS/u)
@@ -40,6 +50,9 @@ describe('desktop package target', () => {
     expect(parseDesktopPackageInvocation(['--prepare-only'], 'darwin', 'arm64').prepareOnly).toBe(true)
     expect(parseDesktopPackageInvocation(['--check'], 'darwin', 'arm64').check).toBe(true)
     expect(parseDesktopPackageInvocation(['win-x64', '--check', '--unsigned'], 'win32', 'x64')).toMatchObject({ check: true, unsigned: true })
+    expect(parseDesktopPackageInvocation([], 'linux', 'arm64').target.name).toBe('linux-arm64')
+    expect(parseDesktopPackageInvocation(['linux-x64', '--dir'], 'linux', 'x64')).toMatchObject({ directory: true, unsigned: false })
+    expect(() => parseDesktopPackageInvocation(['linux-x64', '--unsigned'], 'linux', 'x64')).toThrow(/no code signature/u)
     expect(() => parseDesktopPackageInvocation(['mac-arm64', 'mac-x64'], 'darwin', 'arm64'))
       .toThrow(/at most one target/u)
   })
@@ -71,6 +84,8 @@ describe('desktop package target', () => {
       'never',
     ])
     expect(desktopElectronBuilderArguments(target, true)).toContain('--dir')
+    expect(desktopElectronBuilderArguments(resolveDesktopPackageTarget('linux-arm64', 'linux', 'arm64'), false))
+      .toEqual(['exec', 'electron-builder', '--config', 'electron-builder.config.mjs', '--linux', '--arm64', '--publish', 'never'])
   })
 
   it('accepts unsigned supported targets and rejects preparation-only use', () => {
@@ -156,4 +171,5 @@ it('allows skipping notarization only for signed macOS packages', () => {
     expect(() => parseDesktopPackageInvocation(['mac-arm64', '--skip-notarization', flag], 'darwin', 'arm64')).toThrow(/requires a signed macOS build/u)
   }
   expect(() => parseDesktopPackageInvocation(['win-x64', '--skip-notarization'], 'win32', 'x64')).toThrow(/requires a signed macOS build/u)
+  expect(() => parseDesktopPackageInvocation(['linux-x64', '--skip-notarization'], 'linux', 'x64')).toThrow(/requires a signed macOS build/u)
 })

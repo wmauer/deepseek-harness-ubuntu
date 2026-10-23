@@ -69,30 +69,54 @@ async function probeWindowsInstallerToolchain(environment: NodeJS.ProcessEnv): P
 }
 
 /**
+ * Confirm one Debian packaging tool answers `--version`; electron-builder's bundled fpm shells out to
+ * `ar`, `tar` and `xz` to assemble the package, and verification reads it back with `dpkg-deb`.
+ */
+async function probeVersionCommand(tool: string): Promise<DesktopToolchainProbeFailure | undefined> {
+  try {
+    await run(tool, ['--version'], { timeout: 20_000 })
+    return undefined
+  }
+  catch (error) {
+    return { tool, detail: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+async function probeLinuxPackagingToolchain(): Promise<DesktopToolchainProbeFailure[]> {
+  const failures: DesktopToolchainProbeFailure[] = []
+  for (const tool of ['dpkg-deb', 'ar', 'xz']) {
+    const failure = await probeVersionCommand(tool)
+    if (failure !== undefined) failures.push(failure)
+  }
+  return failures
+}
+
+/**
  * Probe every external tool one packaging run needs.
- * @param platform - Target platform; a Windows target already requires a Windows build host.
+ * @param platform - Target platform; Windows and Linux targets already require a matching build host.
  * @param environment - Packaging environment used to locate Windows tooling.
  * @returns Every probe that failed, empty when the host can run the packaging sequence.
  */
 export async function probeDesktopToolchain(
-  platform: 'darwin' | 'win32',
+  platform: 'darwin' | 'win32' | 'linux',
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<readonly DesktopToolchainProbeFailure[]> {
   const failures: DesktopToolchainProbeFailure[] = []
   const tar = await probeTar()
   if (tar !== undefined) failures.push({ tool: 'tar', detail: tar })
   if (platform === 'win32') failures.push(...await probeWindowsInstallerToolchain(environment))
+  if (platform === 'linux') failures.push(...await probeLinuxPackagingToolchain())
   return failures
 }
 
 /**
  * Probe the toolchain and fail with every problem the host has.
- * @param platform - Target platform; a Windows target already requires a Windows build host.
+ * @param platform - Target platform; Windows and Linux targets already require a matching build host.
  * @param environment - Packaging environment used to locate Windows tooling.
  * @returns Resolves when every probe passes.
  */
 export async function requireDesktopToolchain(
-  platform: 'darwin' | 'win32',
+  platform: 'darwin' | 'win32' | 'linux',
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
   const failures = await probeDesktopToolchain(platform, environment)

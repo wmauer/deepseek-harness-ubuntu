@@ -140,7 +140,10 @@ export class DesktopCommandManager {
     const entry = join(this.options.resources, 'runtime', 'cli', 'command-manager.js')
     let stdout: string
     try {
-      if (elevated) {
+      if (elevated && process.platform === 'linux') {
+        // pkexec authorizes through the session's polkit agent and starts the worker with a clean root environment.
+        stdout = (await promisify(execFile)('pkexec', [node, entry, operation, expected ?? ''], { maxBuffer: 65536 })).stdout
+      } else if (elevated) {
         const appleScript = 'on run argv\nset cmd to "/usr/bin/env -i " & quoted form of (item 1 of argv) & " " & quoted form of (item 2 of argv) & " " & quoted form of (item 3 of argv) & " " & quoted form of (item 4 of argv)\ndo shell script cmd with administrator privileges\nend run'
         stdout = (await promisify(execFile)('/usr/bin/osascript', ['-e', appleScript, node, entry, operation, expected ?? ''],
           { maxBuffer: 65536 })).stdout
@@ -154,6 +157,10 @@ export class DesktopCommandManager {
       if (elevated && object(error) && typeof error.stderr === 'string' && /\(-128\)\s*$/u.test(error.stderr)) {
         throw new CommandWorkerError('ECANCELED', 'Command authorization was cancelled.')
       }
+      // pkexec exits 126 when the user dismisses the authentication dialog.
+      if (elevated && process.platform === 'linux' && object(error) && error.code === 126) {
+        throw new CommandWorkerError('ECANCELED', 'Command authorization was cancelled.')
+      }
       if (object(error) && typeof error.stdout === 'string' && error.stdout.trim().startsWith('{')) stdout = error.stdout
       else throw new CommandWorkerError('EIO', 'Command-manager process failed.')
     }
@@ -161,7 +168,7 @@ export class DesktopCommandManager {
     if (!object(response) || typeof response.ok !== 'boolean') throw new Error('Invalid command-manager response.')
     if (!response.ok) {
       const code = typeof response.code === 'string' ? response.code : 'EIO'
-      if (!elevated && process.platform === 'darwin' && operation !== 'inspect' && ['EACCES', 'EPERM'].includes(code)) {
+      if (!elevated && (process.platform === 'darwin' || process.platform === 'linux') && operation !== 'inspect' && ['EACCES', 'EPERM'].includes(code)) {
         return this.worker(operation, expected, true)
       }
       throw new CommandWorkerError(code, typeof response.message === 'string' ? response.message : 'Command management failed.')
@@ -171,7 +178,7 @@ export class DesktopCommandManager {
 
   private async inspect(): Promise<CommandState> {
     const state = await this.worker('inspect')
-    if (process.platform !== 'darwin') return state
+    if (process.platform === 'win32') return state
     try {
       return { ...state, ...await shellCommand() }
     } catch {

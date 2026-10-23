@@ -21,6 +21,12 @@ vi.mock('node:child_process', async (importOriginal) => {
   const { promisify } = await import('node:util')
   const execute = promisify(actual.execFile)
   const invoke = async (file: string, args: string[], options: ExecFileOptions) => {
+    if (file === 'pkexec') {
+      external.elevations++
+      // polkit's dismissed dialog is exit status 126; an approval runs the worker as the same user here.
+      if (external.cancelAuthorization) return execute(process.execPath, ['-e', 'process.exit(126)'], options)
+      return execute(args[0]!, args.slice(1), options)
+    }
     if (file !== '/usr/bin/osascript') return execute(file, args, options)
     external.elevations++
     // Exercise AppleScript's real stdout/error transport without authorizing an OS mutation.
@@ -56,7 +62,7 @@ async function fixture(options: {
     directory: root, launcher: join(root, 'desktop-dsh'),
     activeCommand: options.managed && !options.shadowed ? join(root, process.platform === 'win32' ? 'dsh.cmd' : 'dsh') : join(root, 'other-dsh'),
   }
-  if (process.platform === 'darwin') {
+  if (process.platform !== 'win32') {
     const shell = join(root, 'lookup-shell')
     await writeFile(shell, '#!/bin/sh\nprintf "\\0DSH_COMMAND\\0"\ncat "$(dirname "$0")/selected-command"\nprintf "\\0"\n', { mode: 0o755 })
     await writeFile(join(root, 'selected-command'), state.activeCommand + '\n')
@@ -124,7 +130,7 @@ it('keeps confirmation when repairing a command shadowed by another installation
   expect(await f.calls()).toEqual([{ operation: 'inspect' }])
 })
 
-it.skipIf(process.platform !== 'darwin')('keeps a declined worker response through the AppleScript transport', async () => {
+it.skipIf(process.platform === 'win32')('keeps a declined worker response through the elevation transport', async () => {
   const f = await fixture({ failure: 'ESTALE', elevate: true })
   f.show.mockResolvedValue({ response: 0, checkboxChecked: false })
   await f.manager.show()
@@ -133,7 +139,7 @@ it.skipIf(process.platform !== 'darwin')('keeps a declined worker response throu
   expect(f.show.mock.lastCall![0]).toMatchObject({ message: en.cliCommandChanged, technicalDetails: 'worker declined' })
 })
 
-it.skipIf(process.platform !== 'darwin')('returns without an error dialog when administrator authorization is cancelled', async () => {
+it.skipIf(process.platform === 'win32')('returns without an error dialog when administrator authorization is cancelled', async () => {
   const f = await fixture({ elevate: true })
   external.cancelAuthorization = true
   f.show.mockResolvedValue({ response: 0, checkboxChecked: false })
